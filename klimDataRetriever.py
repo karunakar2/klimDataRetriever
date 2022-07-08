@@ -46,6 +46,8 @@ class klimDataRetriever:
     
     _samUrl = 'http://www.nerc-bas.ac.uk/public/icd/gjma/newsam.1957.2007.txt'
     _ipoUrl = 'https://psl.noaa.gov/data/timeseries/IPOTPI/tpi.timeseries.ersstv5.filt.data'
+    
+    _debug = False
         
     def __init__(self, seasons:dict=None, hydroYearStartMonth:str=None, SAM:str='marshal', IPOfilt:bool = True, 
                  cached:bool=True, helpMe:bool=False, debug:bool=False):
@@ -63,6 +65,7 @@ class klimDataRetriever:
             
         else :
             if debug:
+                self._debug = True
                 self.citation()
             
             if seasons != None:
@@ -144,12 +147,64 @@ class klimDataRetriever:
             return df
     
     def getClimData(self)  -> pd.DataFrame() :
-        temp1 = self.getSOIdata()
-        temp2 = self.getIPOdata()
-        temp3 = self.getSPSDdata()
-        temp4 = self.getAAOdata()
-        temp5 = self.getIODdata()
-        _,temp6,temp7 = self.getSTRdata()
+        concatList = []
+        hdrKeys = []
+        try:
+            temp1 = self.getSOIdata()
+            concatList.append(temp1.set_index('year'))
+            hdrKeys.append('soi')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch SOI data')
+            pass
+        try:
+            temp2 = self.getIPOdata()
+            concatList.append(temp2.set_index('year'))
+            hdrKeys.append('ipo')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch IPO data')
+            pass
+        try:
+            temp3 = self.getSPSDdata()
+            concatList.append(temp3.set_index('year'))
+            hdrKeys.append('sps')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch SPS data')
+            pass
+        try:
+            temp4 = self.getAAOdata()
+            concatList.append(temp4.set_index('year'))
+            hdrKeys.append('aao')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch AAO data')
+            pass
+        try:
+            temp5 = self.getIODdata()
+            concatList.append(temp5.set_index('year'))
+            hdrKeys.append('iod')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch IOD data')
+            pass
+        try:
+            _,temp6,temp7 = self.getSTRdata()
+            concatList.append(temp6.set_index('year'))
+            hdrKeys.append('stri')
+            concatList.append(temp7.set_index('year'))
+            hdrKeys.append('strp')
+        except Exception as er:
+            if self._debug:
+                print(er)
+            print('Cannot fetch STR data')
+            pass
         
         """
         display(temp1)
@@ -160,11 +215,17 @@ class klimDataRetriever:
         display(temp6)
         display(temp7)
         """
-        
+        """
         df = (pd.concat([temp1.set_index('year'), temp2.set_index('year'), temp3.set_index('year'), 
                          temp4.set_index('year'), temp5.set_index('year'), temp6.set_index('year'), temp7.set_index('year')], 
                     axis=1, 
                     keys=['soi','ipo','sps','aao','iod','stri','strp'])
+                .swaplevel(0,1,axis=1)
+                .sort_index(axis=1, ascending=[True, False])
+                )
+        """
+        df = (pd.concat(concatList, axis=1, 
+                    keys=hdrKeys)
                 .swaplevel(0,1,axis=1)
                 .sort_index(axis=1, ascending=[True, False])
                 )
