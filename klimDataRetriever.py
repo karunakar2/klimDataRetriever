@@ -52,57 +52,56 @@ class klimDataRetriever:
     def __init__(self, seasons:dict=None, hydroYearStartMonth:str=None, SAM:str='marshal', IPOfilt:bool = True, 
                  cached:bool=True, helpMe:bool=False, debug:bool=False):
         myMonths = self._climDataHeader[1:]
-        
+
         if helpMe:
             self.citation()
             print('hydroYear needs a month keyword from ')
             print(myMonths)
             print('if not specified, it starts from July and ends by June of the following year')
-            
+
             #seasons input
             print('The seasons need a dictionary which looks like')
             print(json.dumps(self._climateWindows))
-            
-        else :
+
+        else:
             if debug:
                 self._debug = True
                 self.citation()
-            
+
             if seasons != None:
                 #do sanity check here before proceeding
                 self._climateWindows = seasons
-                
+
             if SAM != 'marshal': #default marshall
                 try :
                     os.remove("aao.csv")
                 except : pass
-                
+
                 print('switching SAM source')
                 self._samUrl = 'https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_ao_index/aao/monthly.aao.index.b79.current.ascii.table'
-                
+
             if IPOfilt: #default true
                 self._ipoUrl = 'https://psl.noaa.gov/data/timeseries/IPOTPI/tpi.timeseries.ersstv5.data'
             else :
                 os.remove("ipo.csv")
                 print('fetching filtered IPO dataset')
-                
+
 
             if hydroYearStartMonth != None:
                 
-                if hydroYearStartMonth in myMonths:
-                    self._climHydYrAvg['year1'] = myMonths[myMonths.index(hydroYearStartMonth):]
-                    self._climHydYrAvg['year2'] = myMonths[:myMonths.index(hydroYearStartMonth)]
-                    temp = str(myMonths.index(hydroYearStartMonth)+1)+'-01'
-                    if len(temp) < 5:
-                        temp = '0'+temp
-                    self._hydroYearMDString = '-'+temp
-                    if debug:
-                        print(json.dumps(self._climHydYrAvg))
-                        print(self._hydroYearMDString)
-                else:
+                if hydroYearStartMonth not in myMonths:
                     raise Exception(hydroYearStartMonth ," can't be used, try one from \n",(',').join(myMonths))
 
-            if cached == False:
+                self._climHydYrAvg['year1'] = myMonths[myMonths.index(hydroYearStartMonth):]
+                self._climHydYrAvg['year2'] = myMonths[:myMonths.index(hydroYearStartMonth)]
+                temp = f'{str(myMonths.index(hydroYearStartMonth) + 1)}-01'
+                if len(temp) < 5:
+                    temp = '0'+temp
+                self._hydroYearMDString = '-'+temp
+                if debug:
+                    print(json.dumps(self._climHydYrAvg))
+                    print(self._hydroYearMDString)
+            if not cached:
                 self._useCached = cached
     
     def citation(self):
@@ -118,35 +117,32 @@ class klimDataRetriever:
         print('STR: HBRC (based on Cai et.al. 2011) || https://www.metoffice.gov.uk/hadobs/hadslp2/')
     
         
-    def getSelectSeries(self, series : str ='hydYrAvg') -> pd.DataFrame() :
-        if not isinstance(series,str) :
+    def getSelectSeries(self, series : str ='hydYrAvg') -> pd.DataFrame():
+        if not isinstance(series, str):
             raise Exception ('Expecting a string in series argument, recieved ', type(series))
-        else :
-            thisSeries = []
-            thisSeries.extend([series, 'datetime','year'])
+        thisSeries = [series, 'datetime', 'year']
+        if self._climMacroDf.empty:
+            self.getClimData()
 
-            if self._climMacroDf.empty:
-                self.getClimData()
-
-            c = self._climMacroDf #.copy()  #dont need a copy here
-            df = c.loc[:, pd.IndexSlice[thisSeries, :]]
-            df.columns = df.columns.droplevel()
-            newCols = []
-            for idx, thisCol in enumerate(df.columns):
-                if '' == thisCol:
-                    if type(df.iloc[1, idx]) is pd.Timestamp:
-                        newCols.append('datetime')
-                    elif type(df.iloc[1, idx]) is np.int64:
-                        newCols.append('year')
-                    else :
-                        print(type(df.iloc[1, idx]))
-                        newCols.append(thisCol)
-                else:
+        c = self._climMacroDf #.copy()  #dont need a copy here
+        df = c.loc[:, pd.IndexSlice[thisSeries, :]]
+        df.columns = df.columns.droplevel()
+        newCols = []
+        for idx, thisCol in enumerate(df.columns):
+            if thisCol == '':
+                if type(df.iloc[1, idx]) is pd.Timestamp:
+                    newCols.append('datetime')
+                elif type(df.iloc[1, idx]) is np.int64:
+                    newCols.append('year')
+                else :
+                    print(type(df.iloc[1, idx]))
                     newCols.append(thisCol)
-            df.columns = newCols
-            return df
+            else:
+                newCols.append(thisCol)
+        df.columns = newCols
+        return df
     
-    def getClimData(self)  -> pd.DataFrame() :
+    def getClimData(self) -> pd.DataFrame():
         concatList = []
         hdrKeys = []
         try:
@@ -157,7 +153,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch SOI data')
-            pass
         try:
             temp2 = self.getIPOdata()
             concatList.append(temp2.set_index('year'))
@@ -166,7 +161,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch IPO data')
-            pass
         try:
             temp3 = self.getSPSDdata()
             concatList.append(temp3.set_index('year'))
@@ -175,7 +169,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch SPS data')
-            pass
         try:
             temp4 = self.getAAOdata()
             concatList.append(temp4.set_index('year'))
@@ -184,7 +177,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch AAO data')
-            pass
         try:
             temp5 = self.getIODdata()
             concatList.append(temp5.set_index('year'))
@@ -193,7 +185,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch IOD data')
-            pass
         try:
             _,temp6,temp7 = self.getSTRdata()
             concatList.append(temp6.set_index('year'))
@@ -204,8 +195,6 @@ class klimDataRetriever:
             if self._debug:
                 print(er)
             print('Cannot fetch STR data')
-            pass
-        
         """
         display(temp1)
         display(temp2)
@@ -232,17 +221,17 @@ class klimDataRetriever:
         df.drop('datetime', axis=1, level=0, inplace=True)
         df.reset_index(inplace=True)
         #display(df['year'])
-        
+
         df['datetime'] = df.apply(lambda row: np.datetime64(str(row['year'].values[0])+self._hydroYearMDString), axis=1)
         self._climMacroDf = df
         return df
     
-    def getSOIdata(self) -> pd.DataFrame() :
+    def getSOIdata(self) -> pd.DataFrame():
         try:
-            if self._useCached :
-                c = pd.read_csv('soi.csv')
-                c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
-            else : raise Exception('please ignore this, discarding locally available file and fetching from source')
+            if not self._useCached:
+                raise Exception('please ignore this, discarding locally available file and fetching from source')
+            c = pd.read_csv('soi.csv')
+            c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
         except Exception as er:
 
             url = 'https://crudata.uea.ac.uk/cru/data/soi/soi.dat'
@@ -275,12 +264,12 @@ class klimDataRetriever:
         #print(c['hydYrAvg'].min(),c['hydYrAvg'].max())
         return c
 
-    def getIODdata(self) -> pd.DataFrame() :
+    def getIODdata(self) -> pd.DataFrame():
         try:
-            if self._useCached :
-                c = pd.read_csv('iod.csv')
-                c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
-            else : raise Exception('please ignore this, discarding locally available file and fetching from source')
+            if not self._useCached:
+                raise Exception('please ignore this, discarding locally available file and fetching from source')
+            c = pd.read_csv('iod.csv')
+            c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
         except Exception as er:
             url = 'https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data'
             c = pd.read_csv(url, delimiter= '\s+', header=None, skiprows = 1, skipfooter = 7, engine='python', na_values=-99)
@@ -302,7 +291,7 @@ class klimDataRetriever:
                 else:
                     c = c.assign(temp=c[self._climateWindows[thisSeason]].mean(axis=1))
                 c = c.rename(columns={"temp": thisSeason})
-            
+
             c['state'] = c.apply(lambda row: 'Neg' if row['hydYrAvg']<0 else 'Pos', axis=1)
             c['datetime'] = c.apply(lambda row: np.datetime64(str(row['year'])+self._hydroYearMDString), axis=1)
 
@@ -311,12 +300,12 @@ class klimDataRetriever:
         #print(c['Annual'].min(),c['Annual'].max())
         return c
     
-    def getIPOdata(self) -> pd.DataFrame() :
+    def getIPOdata(self) -> pd.DataFrame():
         try:
-            if self._useCached :
-                c = pd.read_csv('ipo.csv')
-                c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
-            else : raise Exception('please ignore this, discarding locally available file and fetching from source')
+            if not self._useCached:
+                raise Exception('please ignore this, discarding locally available file and fetching from source')
+            c = pd.read_csv('ipo.csv')
+            c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
         except Exception as er:
             #print(self._ipoUrl)
             #the latest data is always unfiltered
@@ -339,7 +328,7 @@ class klimDataRetriever:
                 else:
                     c = c.assign(temp=c[self._climateWindows[thisSeason]].mean(axis=1))
                 c = c.rename(columns={"temp": thisSeason})
-            
+
             c['state'] = c.apply(lambda row: 'Neg' if row['hydYrAvg']<0 else 'Pos', axis=1)
             c['datetime'] = c.apply(lambda row: np.datetime64(str(row['year'])+self._hydroYearMDString), axis=1)
 
@@ -350,10 +339,10 @@ class klimDataRetriever:
 
     def getAAOdata(self) -> pd.DataFrame():
         try:
-            if self._useCached :
-                c = pd.read_csv('aao.csv')
-                c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
-            else : raise Exception('please ignore this, discarding locally available file and fetching from source')
+            if not self._useCached:
+                raise Exception('please ignore this, discarding locally available file and fetching from source')
+            c = pd.read_csv('aao.csv')
+            c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
         except Exception as er:
             #the latest data is always unfiltered
             c = pd.read_csv(self._samUrl, delimiter= '\s+') #, header=None, skiprows = 1, skipfooter = 11, engine='python', na_values=-99)
@@ -385,12 +374,12 @@ class klimDataRetriever:
         #print(c['Annual'].min(),c['Annual'].max())
         return c
     
-    def getSPSDdata(self) -> pd.DataFrame() :
+    def getSPSDdata(self) -> pd.DataFrame():
         try:
-            if self._useCached :
-                c = pd.read_csv('sspd.csv')
-                c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
-            else : raise Exception('please ignore this, discarding locally available file and fetching from source')
+            if not self._useCached:
+                raise Exception('please ignore this, discarding locally available file and fetching from source')
+            c = pd.read_csv('sspd.csv')
+            c['datetime']= pd.to_datetime(c['datetime']) #make sure object is datetime
         except Exception as er:
             print(er)
 
@@ -452,7 +441,7 @@ class klimDataRetriever:
                 else:
                     c = c.assign(temp=c[self._climateWindows[thisSeason]].mean(axis=1))
                 c = c.rename(columns={"temp": thisSeason})
-            
+
             c['state'] = c.apply(lambda row: 'Neg' if row['hydYrAvg']<0 else 'Pos', axis=1)
             c['datetime'] = c.apply(lambda row: np.datetime64(str(int(row['year']))+self._hydroYearMDString), axis=1)
 
@@ -462,8 +451,7 @@ class klimDataRetriever:
 
     def _mySubFn(self,row, redDf):
         try:
-            temp = (redDf[redDf['year'] == row['year']])['delSSTA'].values[0]
-            return temp
+            return (redDf[redDf['year'] == row['year']])['delSSTA'].values[0]
         except:
             return np.nan
 
